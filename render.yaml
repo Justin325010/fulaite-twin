@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: fulaite-twin
+    runtime: static
+    buildCommand: ""
+    startCommand: ""
+    staticPublishPath: .

@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="description" content="辐射编程 × 福莱特玻璃窑炉热辐射数字孪生">
+<title>辐射编程 × 福莱特玻璃 · 窑炉热辐射数字孪生</title>
+<style>
+:root{
+  --bg-deep:#03090e; --ink:#dcecf5; --ink-soft:#aec4d1; --muted:#6f8c9e;
+  --cyan:#66e4ff; --teal:#31e0b5; --orange:#ffb45e; --red:#ff5d4a; --amber:#ffcf6e;
+  --line:rgba(107,196,228,.20); --line-soft:rgba(107,196,228,.10); --panel:rgba(5,17,26,.78);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden}
+body{
+  font-family:"Bahnschrift","Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  color:var(--ink);
+  background:radial-gradient(ellipse at 56% 7%, #143043 0%, #0a1b27 34%, #040b11 70%, #020609 100%);
+  -webkit-font-smoothing:antialiased; user-select:none;
+}
+button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
+#app{position:fixed;inset:0;overflow:hidden}
+#webgl{position:absolute;inset:0;z-index:0}
+#webgl canvas{display:block;outline:none;cursor:grab;touch-action:none}
+#webgl canvas.is-dragging{cursor:grabbing}
+#webgl canvas.is-hovering{cursor:pointer}
+.screen-fx{position:absolute;inset:0;z-index:3;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 38%, transparent 45%, rgba(0,3,6,.52) 100%),
+    repeating-linear-gradient(0deg, rgba(150,225,255,.018) 0px, rgba(150,225,255,.018) 1px, transparent 1px, transparent 3px);
+  mix-blend-mode:screen;opacity:.6;}
+.screen-fx::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg, rgba(102,228,255,.035) 0%, transparent 17%, transparent 83%, rgba(0,0,0,.28) 100%);}
+
+.hud{position:absolute;z-index:10;pointer-events:none}
+.brand{top:26px;left:30px;width:min(540px,46vw)}
+.eyebrow{display:flex;align-items:center;gap:9px;font-family:"Consolas","Cascadia Mono",monospace;
+  font-size:10px;letter-spacing:.24em;color:#8fb9cb;text-transform:uppercase;}
+.eyebrow .slash{color:#3f6577}
+.eyebrow .pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--amber);
+  box-shadow:0 0 10px var(--amber),0 0 22px rgba(255,207,110,.35);animation:blink 2.4s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+h1{margin-top:11px;font-size:clamp(22px,2.25vw,34px);line-height:1.06;font-weight:600;
+  letter-spacing:.01em;white-space:nowrap;text-shadow:0 2px 18px rgba(0,0,0,.55);}
+h1 .num{color:var(--amber);font-family:"Consolas","Cascadia Mono",monospace;font-weight:600;letter-spacing:-.02em}
+h1 small{font-size:.52em;color:#a7c6d4;font-weight:400;letter-spacing:.04em;margin-left:8px}
+.subtitle{margin-top:8px;font-family:"Consolas","Cascadia Mono",monospace;font-size:9px;
+  letter-spacing:.22em;color:#678ea2;white-space:nowrap;}
+.metric-deck{display:flex;align-items:stretch;gap:0;margin-top:18px;border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line-soft);background:linear-gradient(90deg, rgba(7,25,36,.68), rgba(7,25,36,.10));
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+.metric{position:relative;flex:1 1 0;min-width:0;padding:9px 10px 8px 10px;border-left:1px solid var(--line-soft);}
+.metric:first-child{border-left:2px solid var(--amber)}
+.metric label{display:block;font-size:9px;color:var(--muted);letter-spacing:.12em;margin-bottom:4px}
+.metric .val{display:flex;align-items:baseline;gap:4px}
+.metric strong{font-family:"Consolas","Cascadia Mono",monospace;font-size:18px;letter-spacing:-.03em;
+  color:#e9f8ff;font-weight:500;text-shadow:0 0 16px rgba(255,207,110,.16);}
+.metric em{font-style:normal;font-size:9px;color:#6f8c9e;font-family:"Consolas",monospace}
+.metric .unit{margin-left:3px;font-size:9px;color:#6f8c9e}
+.mode-dock{position:absolute;z-index:12;top:26px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;}
+.mode-caption{font-family:"Consolas",monospace;font-size:9px;color:#668a9d;letter-spacing:.18em}
+.mode-switch{display:flex;align-items:center;gap:2px;padding:4px;border:1px solid var(--line);
+  border-radius:10px;background:rgba(5,17,26,.72);backdrop-filter:blur(8px);}
+.mode-btn{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:7px;color:#8fb6c6;font-size:12px;letter-spacing:.04em;transition:.18s;}
+.mode-btn .dot{width:7px;height:7px;border-radius:50%;background:#45677a;transition:.18s}
+.mode-btn:hover{color:#dcecf5}
+.mode-btn.is-active{background:rgba(102,228,255,.12);color:#eaf8ff}
+.mode-btn.is-active .dot{background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.tool-btn{display:flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;
+  background:rgba(5,17,26,.72);color:#9fc0cf;font-size:12px;}
+.tool-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8}
+.tool-btn:hover{color:#eaf8ff;border-color:rgba(107,196,228,.4)}
+.mode-note{font-family:"Consolas",monospace;font-size:10px;color:#7fa6b8;max-width:280px;line-height:1.5}
+.plant-index{position:absolute;z-index:9;left:26px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:16px;pointer-events:none;}
+.pi{display:flex;align-items:center;gap:10px;font-family:"Consolas",monospace;font-size:9px;letter-spacing:.2em;color:#4e7084;opacity:.7;}
+.pi .n{color:#2b4c60}
+.pi .l{width:26px;height:1px;background:linear-gradient(90deg,#2b4c60,transparent)}
+.pi.active{color:#9fd3e6;opacity:1}
+.pi.active .n{color:var(--amber)}
+.inspector{position:absolute;z-index:11;right:18px;top:26px;width:min(340px,32vw);max-height:calc(100vh - 52px);
+  display:flex;flex-direction:column;border:1px solid var(--line);border-left:2px solid var(--cyan);
+  border-radius:12px;background:var(--panel);backdrop-filter:blur(10px);overflow:hidden;--accent:var(--cyan);}
+.inspector-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;border-bottom:1px solid var(--line-soft);}
+.inspector-head .label{font-family:"Consolas",monospace;font-size:9px;letter-spacing:.22em;color:var(--accent)}
+.inspector-head .live{display:flex;align-items:center;gap:6px;font-family:"Consolas",monospace;font-size:9px;color:#7ee7b0;letter-spacing:.18em}
+.inspector-head .live i{width:6px;height:6px;border-radius:50%;background:#42e6a2;box-shadow:0 0 8px #42e6a2;animation:blink 1.8s infinite}
+.inspector-scroll{overflow-y:auto;padding:14px 16px 10px;min-height:0}
+.inspector-foot{display:flex;justify-content:space-between;padding:8px 14px;border-top:1px solid var(--line-soft);
+  font-family:"Consolas",monospace;font-size:8px;letter-spacing:.16em;color:#54788b}
+.overview-kicker{font-family:"Consolas",monospace;font-size:9px;letter-spacing:.24em;color:var(--amber)}
+.overview-title{font-size:24px;line-height:1.15;margin-top:6px;font-weight:600}
+.overview-title span{color:var(--amber);font-family:"Consolas",monospace}
+.overview-desc{margin-top:10px;font-size:12px;line-height:1.75;color:var(--ink-soft)}
+.overview-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.overview-stat{border:1px solid var(--line-soft);border-radius:8px;padding:9px 10px;background:rgba(8,25,37,.4)}
+.overview-stat label{display:block;font-size:9px;color:var(--muted);letter-spacing:.08em;margin-bottom:5px}
+.overview-stat b{font-family:"Consolas",monospace;font-size:17px;font-weight:500;color:#eaf8ff}
+.overview-stat em{font-style:normal;font-size:10px;color:#6f8c9e;margin-left:3px}
+.overview-hint{margin-top:14px;font-size:11px;line-height:1.7;color:#8fb6c6;border-left:2px solid var(--amber);padding-left:10px}
+.sim-note{margin-top:12px;font-family:"Consolas",monospace;font-size:8px;letter-spacing:.14em;color:#4e7084}
+.device-category{display:flex;align-items:center;gap:8px}
+.category-tag{font-size:10px;color:var(--accent);letter-spacing:.08em}
+.device-code{font-family:"Consolas",monospace;font-size:9px;color:#54788b;letter-spacing:.12em}
+.device-title{font-size:21px;font-weight:600;margin-top:8px}
+.device-en{font-family:"Consolas",monospace;font-size:9px;letter-spacing:.2em;color:#678ea2;margin-top:4px}
+.device-desc{margin-top:10px;font-size:12px;line-height:1.75;color:var(--ink-soft)}
+.status-row{display:flex;gap:8px;margin-top:12px}
+.status-pill{display:flex;align-items:center;gap:6px;font-size:10px;color:#7ee7b0;letter-spacing:.06em}
+.status-pill i{width:6px;height:6px;border-radius:50%;background:#42e6a2;box-shadow:0 0 8px #42e6a2}
+.status-pill.warn{color:var(--orange)}
+.status-pill.warn i{background:var(--orange);box-shadow:0 0 8px var(--orange)}
+.mode-pill{font-family:"Consolas",monospace;font-size:9px;color:#9fc0cf;letter-spacing:.1em;align-self:center}
+.param-head{display:flex;justify-content:space-between;margin-top:14px;padding-top:10px;border-top:1px solid var(--line-soft);
+  font-family:"Consolas",monospace;font-size:8px;letter-spacing:.18em;color:#678ea2}
+.param-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.param{border:1px solid var(--line-soft);border-radius:8px;padding:8px 9px;background:rgba(8,25,37,.35)}
+.param label{display:block;font-size:9px;color:var(--muted);margin-bottom:4px}
+.param b{font-family:"Consolas",monospace;font-size:16px;font-weight:500;color:#eaf8ff}
+.param em{font-style:normal;font-size:9px;color:#6f8c9e;margin-left:2px}
+.device-catalog{position:absolute;z-index:12;right:18px;bottom:18px;width:min(300px,28vw);
+  border:1px solid var(--line);border-radius:12px;background:var(--panel);backdrop-filter:blur(10px);overflow:hidden;--catalog-accent:var(--amber);}
+.dc-head{display:flex;align-items:center;justify-content:space-between;padding:11px 13px 9px;border-bottom:1px solid var(--line-soft)}
+.dc-title-wrap .dc-title{font-size:13px;font-weight:600;letter-spacing:.04em}
+.dc-title-wrap .dc-sub{display:block;font-family:"Consolas",monospace;font-size:8px;letter-spacing:.2em;color:#54788b;margin-top:2px}
+.dc-head-right{display:flex;align-items:center;gap:10px}
+.dc-count{font-family:"Consolas",monospace;font-size:9px;color:#678ea2}
+.dc-count b{color:#eaf8ff;font-size:13px}
+.dc-collapse{font-size:14px;color:#8fb6c6;width:22px;height:22px;border:1px solid var(--line);border-radius:6px}
+.dc-body{padding:10px}
+.dc-tools{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.dc-search{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(8,25,37,.5);color:#eaf8ff;font-size:12px;outline:none}
+.dc-search::placeholder{color:#54788b}
+.dc-hint{font-family:"Consolas",monospace;font-size:8px;letter-spacing:.12em;color:#54788b}
+.dc-list{max-height:38vh;overflow-y:auto}
+.dc-overview{display:flex;justify-content:space-between;width:100%;padding:8px 10px;margin-bottom:6px;border:1px solid var(--line-soft);
+  border-radius:8px;color:#9fc0cf;font-size:11px}
+.dc-overview.is-active{border-color:var(--amber);color:#eaf8ff;background:rgba(255,207,110,.06)}
+.device-group{margin-bottom:8px;--cat:var(--cyan)}
+.device-group-head{display:flex;justify-content:space-between;padding:4px 2px;font-size:10px;color:var(--cat);letter-spacing:.1em}
+.device-group-head .dg-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--cat);margin-right:6px;box-shadow:0 0 8px var(--cat)}
+.dg-count{font-family:"Consolas",monospace;color:#54788b}
+.device-group-items{display:flex;flex-direction:column;gap:2px}
+.device-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border-radius:7px;color:#9fbdc9;font-size:12px;text-align:left}
+.device-item:hover{background:rgba(102,228,255,.07);color:#eaf8ff}
+.device-item.is-active{background:rgba(255,207,110,.1);color:#ffe9c2}
+.device-item .di-dot{width:5px;height:5px;border-radius:50%;background:#45677a;flex:none}
+.device-item.is-active .di-dot{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.device-item .di-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.device-item .di-code{font-family:"Consolas",monospace;font-size:8px;color:#54788b}
+.legend{position:absolute;z-index:9;left:26px;bottom:18px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--panel);backdrop-filter:blur(8px);pointer-events:none}
+.legend-head{display:flex;justify-content:space-between;gap:14px;font-family:"Consolas",monospace;
+  font-size:8px;letter-spacing:.16em;color:#678ea2;margin-bottom:8px}
+.legend-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:10px;color:#aec4d1}
+.swatch{width:9px;height:9px;border-radius:2px;background:var(--c);box-shadow:0 0 8px var(--c)}
+.legend-foot{display:flex;align-items:center;gap:8px;margin-top:8px;font-family:"Consolas",monospace;font-size:8px;letter-spacing:.1em;color:#54788b}
+.legend-foot .arrow{color:var(--amber);letter-spacing:.2em}
+.view-hint{position:absolute;z-index:8;left:50%;bottom:16px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--line-soft);border-radius:20px;
+  background:rgba(5,17,26,.6);font-size:10px;color:#7fa6b8;pointer-events:none}
+.view-hint .kbd{font-family:"Consolas",monospace;font-size:9px;color:#cde8f3;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.view-hint .sp{width:1px;height:10px;background:var(--line)}
+.loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 40%, #0d2531 0%, #050e15 65%, #020609 100%);transition:opacity .6s}
+.loading.is-hidden{opacity:0;pointer-events:none}
+.loading-inner{text-align:center;width:min(440px,86vw)}
+.loader-ring{width:56px;height:56px;margin:0 auto;border:2px solid rgba(102,228,255,.16);
+  border-top-color:var(--amber);border-radius:50%;animation:spin 1.1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-brand{margin-top:22px;font-family:"Consolas",monospace;font-size:10px;letter-spacing:.3em;color:var(--amber)}
+.loading-title{margin-top:10px;font-size:19px;font-weight:600}
+.loading-text{margin-top:10px;font-family:"Consolas",monospace;font-size:10px;letter-spacing:.14em;color:#678ea2}
+.loading-bar{width:220px;height:2px;margin:18px auto 0;background:rgba(102,228,255,.12);overflow:hidden;border-radius:2px}
+.loading-bar span{display:block;height:100%;width:40%;background:linear-gradient(90deg,var(--amber),var(--cyan));animation:loadslide 1.2s ease-in-out infinite}
+@keyframes loadslide{0%{transform:translateX(-100%)}100%{transform:translateX(280%)}}
+#error-banner{position:fixed;z-index:200;left:50%;top:50%;transform:translate(-50%,-50%);max-width:640px;
+  padding:18px 20px;border:1px solid var(--red);border-radius:12px;background:rgba(40,10,8,.92);color:#ffd9d3;font-size:13px;line-height:1.7}
+#error-banner code{font-family:"Consolas",monospace;color:#ffb3a6}
+@media (max-width: 820px){
+  .brand{top:10px;left:12px;right:12px;width:auto}
+  .eyebrow{font-size:7px;letter-spacing:.16em;gap:6px}
+  .eyebrow .pulse-dot{width:5px;height:5px}
+  h1{margin-top:6px;font-size:16px;white-space:normal;line-height:1.22}
+  h1 small{font-size:.58em;margin-left:4px}
+  .subtitle{display:none}
+  .metric-deck{margin-top:8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .metric{padding:5px 7px 4px;border-left:1px solid var(--line-soft)}
+  .metric:first-child{border-left:2px solid var(--amber)}
+  .metric:nth-child(4){border-left:2px solid var(--amber)}
+  .metric label{font-size:7px;margin-bottom:2px;letter-spacing:.06em}
+  .metric strong{font-size:12px}
+  .metric em,.metric .unit{font-size:7px}
+  .metric:last-child{display:none}
+  .mode-dock{top:auto;left:0;right:0;bottom:0;transform:none;display:flex;justify-content:center;align-items:center;gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:rgba(4,14,21,.86);border-top:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  .mode-caption,.mode-note{display:none}
+  .mode-btn{padding:7px 9px;font-size:11px;gap:5px;border-radius:7px}
+  .mode-btn .dot{width:6px;height:6px}
+  .tool-btn{padding:7px 9px;font-size:11px}
+  .tool-btn svg{width:16px;height:16px}
+  .plant-index,.legend,.view-hint,.device-catalog{display:none}
+  .inspector{top:auto;right:10px;left:10px;bottom:calc(60px + env(safe-area-inset-bottom,0px));width:auto;max-height:46vh;border-left:1px solid var(--line);border-top:2px solid var(--cyan);border-radius:14px 14px 0 0}
+  .inspector-head{padding:8px 12px 6px}
+  .inspector-head .label{font-size:8px}
+  .inspector-scroll{padding:10px 12px 8px}
+  .inspector-foot{display:none}
+  .overview-title{font-size:18px;margin-top:4px}
+  .overview-desc{font-size:11px;margin-top:8px;line-height:1.65}
+  .overview-stats{gap:6px;margin-top:10px}
+  .overview-stat{padding:7px 8px}
+  .overview-stat b{font-size:14px}
+  .device-title{font-size:17px}
+  .device-desc{font-size:11px;line-height:1.65}
+  .param-grid{gap:6px;margin-top:8px}
+  .param{padding:6px 7px}
+  .param b{font-size:13px}
+  #error-banner{width:min(640px,calc(100vw - 24px));padding:14px 16px;font-size:12px}
+}
+@media (max-height: 520px) and (orientation: landscape){
+  .brand{top:8px;left:10px;right:auto;width:min(340px,44vw)}
+  .eyebrow{font-size:7px}
+  h1{font-size:14px;white-space:nowrap}
+  .subtitle{display:none}
+  .metric-deck{display:none}
+  .mode-dock{top:auto;left:auto;right:10px;bottom:8px;transform:none;gap:6px;padding:6px 8px;background:rgba(4,14,21,.78);border:1px solid var(--line);border-radius:12px}
+  .mode-caption,.mode-note{display:none}
+  .mode-btn{padding:6px 8px;font-size:10px}
+  .tool-btn span{display:none}
+  .inspector{top:8px;right:10px;left:auto;bottom:auto;width:min(300px,40vw);max-height:calc(100vh - 16px)}
+  .inspector-foot{display:flex}
+  .plant-index,.legend,.view-hint,.device-catalog{display:none}
+}
+</style>
+</head>
+<body>
+<div id="loading" class="loading">
+  <div class="loading-inner">
+    <div class="loader-ring"></div>
+    <div class="loading-brand">RADIATION PROGRAMMING · GLASS TWIN</div>
+    <div class="loading-title">辐射编程 × 福莱特玻璃窑炉</div>
+    <div class="loading-text" id="loadingText">正在初始化三维场景与设备几何体…</div>
+    <div class="loading-bar"><span></span></div>
+  </div>
+</div>
+<div id="app">
+  <div id="webgl" aria-label="辐射编程玻璃窑炉数字孪生三维场景"></div>
+  <div class="screen-fx"></div>
+
+  <header class="hud brand">
+    <div class="eyebrow">
+      <span class="pulse-dot"></span>
+      <span>RADIATION TWIN</span>
+      <span class="slash">/</span>
+      <span>FLAT GLASS FURNACE</span>
+    </div>
+    <h1><span class="num">辐射编程</span><small>RADIATION PROGRAMMING</small> 福莱特玻璃窑炉</h1>
+    <div class="subtitle">FLOAT GLASS FURNACE · DIRECTIONAL RADIATION DIGITAL TWIN</div>
+    <div class="metric-deck">
+      <div class="metric"><label id="hudL0">能耗</label><div class="val"><strong id="hudV0">-10%</strong><em id="hudU0"></em></div></div>
+      <div class="metric"><label id="hudL1">成品率</label><div class="val"><strong id="hudV1">+20.1%</strong><em id="hudU1"></em></div></div>
+      <div class="metric"><label id="hudL2">CO₂ 排放</label><div class="val"><strong id="hudV2">-45.07%</strong><em id="hudU2"></em></div></div>
+      <div class="metric"><label id="hudL3">定向辐射可控性</label><div class="val"><strong id="hudV3">+67%</strong><em id="hudU3"></em></div></div>
+      <div class="metric"><label>运行模式</label><div class="val"><strong id="hudMode" style="font-size:13px;letter-spacing:.06em">辐射编程</strong><em id="hudModeEn">PROGRAMMED</em></div></div>
+    </div>
+  </header>
+
+  <div class="mode-dock">
+    <span class="mode-caption">CONTROL MODE</span>
+    <div class="mode-switch" role="group" aria-label="辐射调控模式">
+      <button class="mode-btn" data-mode="conventional" type="button"><span class="dot"></span>传统燃烧</button>
+      <button class="mode-btn is-active" data-mode="programmed" type="button"><span class="dot"></span>辐射编程</button>
+      <button class="mode-btn" data-mode="diagnostics" type="button"><span class="dot"></span>智慧诊断</button>
+    </div>
+    <button class="tool-btn" id="btnReset" type="button" title="恢复初始视角">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a8 8 0 1 1 1.6 7.4M4 4v5h5"/></svg>
+      <span>重置视角</span>
+    </button>
+    <div class="mode-note" id="modeNote">辐射编程 · 碳烟定向辐射，按需供热</div>
+  </div>
+
+  <div class="plant-index" aria-hidden="true">
+    <div class="pi"><span class="n">01</span><span class="l"></span><span>FURNACE</span></div>
+    <div class="pi"><span class="n">02</span><span class="l"></span><span>BURNERS</span></div>
+    <div class="pi"><span class="n">03</span><span class="l"></span><span>TIN BATH</span></div>
+    <div class="pi"><span class="n">04</span><span class="l"></span><span>LEHR / COLD</span></div>
+  </div>
+
+  <aside class="inspector" id="inspector" aria-live="polite">
+    <div class="inspector-head">
+      <span class="label">DEVICE INSPECTOR</span>
+      <span class="live"><i></i>LIVE</span>
+    </div>
+    <div class="inspector-scroll" id="inspectorContent"></div>
+    <div class="inspector-foot">
+      <span>HOVER / SELECT DEVICE</span>
+      <span id="hoverState">PLANT OVERVIEW</span>
+    </div>
+  </aside>
+
+  <aside class="device-catalog" id="deviceCatalog" aria-label="设备目录">
+    <div class="dc-head">
+      <div class="dc-title-wrap">
+        <span class="dc-title">设备目录</span>
+        <span class="dc-sub">DEVICE INDEX</span>
+      </div>
+      <div class="dc-head-right">
+        <span class="dc-count" id="deviceCount"><b>0</b> 台设备</span>
+        <button class="dc-collapse" id="catalogToggle" type="button" aria-expanded="true" title="收起 / 展开设备目录"><span>⌃</span></button>
+      </div>
+    </div>
+    <div class="dc-body">
+      <div class="dc-tools">
+        <input class="dc-search" id="deviceSearch" type="search" autocomplete="off" spellcheck="false" placeholder="搜索设备名称 / 编号…">
+        <span class="dc-hint">点击名称 · 自动定位</span>
+      </div>
+      <div class="dc-list" id="deviceList"></div>
+    </div>
+  </aside>
+
+  <aside class="legend">
+    <div class="legend-head"><span>介质 / MEDIA</span><span>LEGEND</span></div>
+    <div class="legend-grid">
+      <span class="legend-item"><i class="swatch" style="--c:#ff8a3d"></i>火焰辐射</span>
+      <span class="legend-item"><i class="swatch" style="--c:#ffcf6e"></i>玻璃液</span>
+      <span class="legend-item"><i class="swatch" style="--c:#aeb9c2"></i>锡液</span>
+      <span class="legend-item"><i class="swatch" style="--c:#9aa7b0"></i>烟气</span>
+      <span class="legend-item"><i class="swatch" style="--c:#42e6a2"></i>控制信号</span>
+      <span class="legend-item"><i class="swatch" style="--c:#66e4ff"></i>诊断传感</span>
+    </div>
+    <div class="legend-foot"><span class="arrow">→ → →</span><span>粒子方向即辐射 / 工质流向</span></div>
+  </aside>
+
+  <div class="view-hint">
+    <span class="kbd">左键</span>旋转 <span class="sp"></span>
+    <span class="kbd">滚轮</span>缩放 <span class="sp"></span>
+    <span class="kbd">右键</span>平移 <span class="sp"></span>
+    <span>悬停设备查看参数</span>
+  </div>
+</div>
+<div id="error-banner" hidden></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+<script>
+(function(){
+  window.__appReady = false;
+  window.__showBootError = function(msg){
+    var banner = document.getElementById('error-banner');
+    var loading = document.getElementById('loading');
+    if(!banner) return;
+    if(loading) loading.classList.add('is-hidden');
+    banner.hidden = false;
+    banner.innerHTML = '<strong>场景未能完成初始化</strong>' + msg;
+  };
+  window.addEventListener('error', function(e){
+    if(window.__appReady) return;
+    var text = (e && e.message) ? e.message : '资源加载异常';
+    var stack = (e && e.error && e.error.stack) ? e.error.stack : '';
+    window.__showBootError('检测到脚本错误：<code>' + text.replace(/[<>]/g,'') + '</code><br><pre style="font-size:10px;white-space:pre-wrap;color:#ffb3a6;margin-top:6px">' + stack.replace(/[<>]/g,'').slice(0,700) + '</pre><br>请使用支持 WebGL2 的 Chrome / Edge 打开，并确认网络连接正常。');
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    if(window.__appReady) return;
+    var text = e && e.reason ? String(e.reason) : '未知异步错误';
+    window.__showBootError('模块加载或场景构建失败：<code>' + text.replace(/[<>]/g,'').slice(0,260) + '</code><br>若为跨域问题，请确认浏览器已联网，或通过本地 HTTP 服务打开。');
+  });
+  setTimeout(function(){
+    if(window.__appReady) return;
+    var el = document.getElementById('loadingText');
+    if(el) el.textContent = '正在加载三维引擎… 如长时间无响应，请检查网络连接';
+  }, 8500);
+})();
+</script>
+
+<script type="module">
+/* 辐射编程 × 福莱特玻璃窑炉 · 单文件 Three.js 数字孪生
+   Y 轴向上，地面 y=0；窑炉在中后部，锡槽/退火/冷端向前延伸。
+   三种模式：传统燃烧 / 辐射编程 / 智慧诊断。 */
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const toRad = (d) => d * Math.PI / 180;
+
+const state = {
+  mode: 'programmed', hovered: null, pinnedInfo: null, activeInfo: null,
+  activeParamNodes: [], activeParamSeed: 0, pointerDirty: false,
+  pointer: new THREE.Vector2(-10, -10), pointerInside: false, cameraTween: null, started: false
+};
+const devices = [];
+const pickables = [];
+const dynamicLabels = [];
+const flameMaterials = [];
+const beamParticles = [];
+
+const MODE_TEXT = {
+  conventional: '传统燃烧 · CONVENTIONAL',
+  programmed: '辐射编程 · PROGRAMMED',
+  diagnostics: '智慧诊断 · TWIN DIAGNOSTICS'
+};
+const MODE_NOTE = {
+  conventional: '传统燃烧 · 火焰辐射无序散逸，炉温不均',
+  programmed: '辐射编程 · 碳烟定向辐射，按需供热，能耗 -10%',
+  diagnostics: '智慧诊断 · 火焰诊断 + PINN-MPC 预测控制'
+};
+const categoryColor = {
+  '窑炉主体': '#ffb45e', '燃烧系统': '#ff7a45', '成形冷端': '#66e4ff', '数字孪生': '#31e0b5'
+};
+
+const host = $('#webgl');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.domElement.setAttribute('role', 'img');
+renderer.domElement.setAttribute('aria-label', '辐射编程福莱特玻璃窑炉三维数字孪生');
+host.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x07131d, 0.0026);
+const camera = new THREE.PerspectiveCamera(43, window.innerWidth / window.innerHeight, 0.5, 460);
+const HOME_CAMERA = new THREE.Vector3(-6, 40, 74);
+const HOME_TARGET = new THREE.Vector3(0, 3, -2);
+camera.position.copy(HOME_CAMERA);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(HOME_TARGET);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.rotateSpeed = 0.55;
+controls.zoomSpeed = 0.75;
+controls.panSpeed = 0.65;
+controls.minDistance = 14;
+controls.maxDistance = 190;
+controls.minPolarAngle = 0.12;
+controls.maxPolarAngle = Math.PI / 2 - 0.025;
+controls.screenSpacePanning = false;
+controls.update();
+
+const hemi = new THREE.HemisphereLight(0x9dcfff, 0x09131a, 1.4);
+scene.add(hemi);
+const keyLight = new THREE.DirectionalLight(0xfff1db, 2.1);
+keyLight.position.set(42, 68, 52);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -70;
+keyLight.shadow.camera.right = 70;
+keyLight.shadow.camera.top = 60;
+keyLight.shadow.camera.bottom = -60;
+keyLight.shadow.camera.near = 8;
+keyLight.shadow.camera.far = 190;
+keyLight.shadow.bias = -0.0004;
+keyLight.shadow.normalBias = 0.7;
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0x4d9fff, 0.8);
+fillLight.position.set(-50, 30, -30);
+scene.add(fillLight);
+const meltGlow = new THREE.PointLight(0xff9a3d, 700, 46, 2);
+meltGlow.position.set(0, 4.5, -3);
+scene.add(meltGlow);
+const tinGlow = new THREE.PointLight(0xffc77a, 120, 30, 2);
+tinGlow.position.set(0, 3, 16);
+scene.add(tinGlow);
+const twinGlow = new THREE.PointLight(0x31e0b5, 90, 26, 2);
+twinGlow.position.set(-20, 3, 6);
+scene.add(twinGlow);
+
+function standard(color, metalness = 0.6, roughness = 0.42, extra = {}) {
+  return new THREE.MeshStandardMaterial({ color, metalness, roughness, ...extra });
+}
+const MAT = {
+  steel: standard(0x9aaab4, 0.84, 0.30),
+  steelDark: standard(0x3d4c56, 0.76, 0.43),
+  brick: standard(0x8a5a3c, 0.10, 0.88),
+  brickDark: standard(0x533b2a, 0.10, 0.92),
+  concrete: standard(0x5a6770, 0.05, 0.92),
+  concreteDark: standard(0x35434d, 0.04, 0.95),
+  meltGlass: standard(0xffb44e, 0.08, 0.32, { emissive: 0x7a3600, emissiveIntensity: 0.85, transparent: true, opacity: 0.82 }),
+  tin: standard(0xb8c4cd, 0.85, 0.22),
+  glassRibbon: standard(0xffcf6e, 0.10, 0.30, { emissive: 0x5a2c00, emissiveIntensity: 0.45, transparent: true, opacity: 0.8 }),
+  insulation: standard(0xc6d1d6, 0.20, 0.74),
+  warning: standard(0xd49448, 0.5, 0.42),
+  pipe: standard(0x283944, 0.82, 0.28),
+  copper: standard(0xb97d4a, 0.82, 0.30)
+};
+function makeCanvasTexture(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  draw(ctx, w, h);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+function makeGlowTexture() {
+  return makeCanvasTexture(128, 128, (ctx, w, h) => {
+    const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.18, 'rgba(255,255,255,.96)');
+    g.addColorStop(0.45, 'rgba(255,255,255,.42)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  });
+}
+const GLOW_TEXTURE = makeGlowTexture();
+function makeGlowSprite(color, size) {
+  const mat = new THREE.SpriteMaterial({
+    map: GLOW_TEXTURE, color, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(size, size, 1);
+  sp.raycast = () => {};
+  sp.userData.noPick = true;
+  return sp;
+}
+function applyCommon(mesh, opts = {}) {
+  mesh.castShadow = opts.castShadow !== false;
+  mesh.receiveShadow = opts.receiveShadow !== false;
+  if (opts.noPick) mesh.userData.noPick = true;
+  if (opts.name) mesh.name = opts.name;
+  if (opts.rot) mesh.rotation.set(opts.rot[0] || 0, opts.rot[1] || 0, opts.rot[2] || 0);
+  return mesh;
+}
+function addBox(parent, size, pos, material, opts = {}) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), material);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  applyCommon(mesh, opts);
+  parent.add(mesh);
+  return mesh;
+}
+function addCylinder(parent, radiusTop, radiusBottom, height, pos, material, opts = {}) {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radiusTop, radiusBottom, height, opts.radial ?? 22, 1, !!opts.openEnded), material);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  applyCommon(mesh, opts);
+  if (opts.axis === 'x') mesh.rotation.z = Math.PI / 2;
+  if (opts.axis === 'z') mesh.rotation.x = Math.PI / 2;
+  parent.add(mesh);
+  return mesh;
+}
+function addSphere(parent, radius, pos, material, opts = {}) {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, opts.seg ?? 22, opts.seg2 ?? 14), material);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  applyCommon(mesh, opts);
+  parent.add(mesh);
+  return mesh;
+}
+function addTorus(parent, radius, tube, pos, material, opts = {}) {
+  const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, opts.radial ?? 10, opts.tubular ?? 30), material);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  applyCommon(mesh, opts);
+  if (opts.axis === 'x') mesh.rotation.y = Math.PI / 2;
+  if (opts.axis === 'y') mesh.rotation.x = Math.PI / 2;
+  parent.add(mesh);
+  return mesh;
+}
+function addCone(group, radius, height, pos, material, opts = {}) {
+  const mesh = new THREE.Mesh(new THREE.ConeGeometry(radius, height, opts.radial ?? 24, 1, !!opts.openEnded), material);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  applyCommon(mesh, opts);
+  if (opts.axis === 'x') mesh.rotation.z = -Math.PI / 2;
+  if (opts.axis === 'z') mesh.rotation.x = Math.PI / 2;
+  group.add(mesh);
+  return mesh;
+}
+function addBeamBetween(parent, a, b, thickness, material, opts = {}) {
+  const from = new THREE.Vector3(...a);
+  const to = new THREE.Vector3(...b);
+  const dir = new THREE.Vector3().subVectors(to, from);
+  const len = dir.length();
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(thickness, thickness, len), material);
+  mesh.position.copy(from.clone().add(to).multiplyScalar(0.5));
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir.normalize());
+  applyCommon(mesh, { ...opts, castShadow: false });
+  parent.add(mesh);
+  return mesh;
+}
+function makeBadgeSprite(main, sub, color = '#ffcf6e', scale = 1) {
+  const tex = makeCanvasTexture(256, 112, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(3,14,20,.80)';
+    ctx.fillRect(5, 5, w - 10, h - 10);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.34;
+    ctx.strokeRect(5.5, 5.5, w - 11, h - 11);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = color;
+    ctx.font = '600 40px Consolas,monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(main, w / 2, 44);
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#8fb6c6';
+    ctx.font = '500 17px Consolas,monospace';
+    ctx.fillText(sub, w / 2, 77);
+  });
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sprite.scale.set(3.15 * scale, 1.38 * scale, 1);
+  sprite.center.set(0.5, 0);
+  sprite.raycast = () => {};
+  sprite.userData.isBadge = true;
+  dynamicLabels.push(sprite);
+  return sprite;
+}
+function addOrientedCone(group, apex, dir, length, radius, material, opts = {}) {
+  const geo = new THREE.ConeGeometry(radius, length, opts.radial ?? 16, 1, false);
+  const mesh = new THREE.Mesh(geo, material);
+  const d = new THREE.Vector3(...dir).normalize();
+  mesh.position.set(apex[0], apex[1], apex[2]).addScaledVector(d, length / 2);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d);
+  mesh.raycast = () => {};
+  mesh.userData.noPick = true;
+  mesh.castShadow = opts.castShadow !== false;
+  group.add(mesh);
+  return mesh;
+}
+function addRadiationCone(group, from, to, halfAngleDeg, color, opacity) {
+  const fromV = new THREE.Vector3(...from);
+  const toV = new THREE.Vector3(...to);
+  const dir = new THREE.Vector3().subVectors(toV, fromV);
+  const len = Math.max(dir.length(), 0.1);
+  const radius = len * Math.tan(toRad(halfAngleDeg));
+  const geo = new THREE.ConeGeometry(Math.max(radius, 0.08), len, 28, 1, true);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+  const cone = new THREE.Mesh(geo, mat);
+  cone.position.copy(fromV.clone().add(toV).multiplyScalar(0.5));
+  cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  cone.raycast = () => {};
+  cone.userData.noPick = true;
+  group.add(cone);
+  return cone;
+}
+function addBeamParticle(from, dir, len, color, size, speed) {
+  const sp = makeGlowSprite(color, size);
+  sp.position.copy(from);
+  sp.userData.beam = { from: from.clone(), dir: dir.clone().normalize(), len, speed, t: Math.random() };
+  beamParticles.push(sp);
+  progRadField.add(sp);
+  return sp;
+}
+function registerDevice(group, info) {
+  const payload = { ...info, seed: info.seed ?? Math.random() * 10, group };
+  group.userData.deviceInfo = payload;
+  group.traverse((obj) => {
+    if (obj.isMesh && !obj.userData.noPick) {
+      obj.userData.deviceInfo = payload;
+      pickables.push(obj);
+    }
+  });
+  devices.push(payload);
+  return payload;
+}
+const hoverBox = new THREE.BoxHelper(new THREE.Object3D(), 0xffcf6e);
+hoverBox.material.transparent = true;
+hoverBox.material.opacity = 0.8;
+hoverBox.material.depthWrite = false;
+hoverBox.material.depthTest = false;
+hoverBox.renderOrder = 30;
+hoverBox.visible = false;
+scene.add(hoverBox);
+const raycaster = new THREE.Raycaster();
+raycaster.far = 420;
+
+const world = new THREE.Group();
+world.name = 'GLASS_WORLD';
+scene.add(world);
+
+(function buildSite() {
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 200), new THREE.MeshStandardMaterial({ color: 0x0a171f, roughness: 0.96, metalness: 0.08 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.06;
+  ground.receiveShadow = true;
+  world.add(ground);
+  const grid = new THREE.GridHelper(200, 60, 0x22566e, 0x102d3b);
+  grid.position.y = 0.005;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.3;
+  grid.material.depthWrite = false;
+  world.add(grid);
+  addBox(world, [74, 0.4, 56], [0, -0.2, 12], MAT.concreteDark, { castShadow: false });
+})();
+
+const FURNACE = { left: -14, right: 14, back: -16, front: 9, meltY: 1.4, wallTop: 6.0, burnY: 3.1 };
+function buildFurnace() {
+  const group = new THREE.Group();
+  group.name = 'GLASS_FURNACE';
+  world.add(group);
+  addBox(group, [30, FURNACE.meltY, 26], [0, FURNACE.meltY / 2, -3.5], MAT.brickDark);
+  addBox(group, [27, 0.42, 23.5], [0, FURNACE.meltY + 0.21, -3.5], MAT.meltGlass, { castShadow: false });
+  addBox(group, [1.1, FURNACE.wallTop - FURNACE.meltY, 26], [FURNACE.left + 0.55, FURNACE.meltY + (FURNACE.wallTop - FURNACE.meltY) / 2, -3.5], MAT.brick);
+  addBox(group, [1.1, FURNACE.wallTop - FURNACE.meltY, 26], [FURNACE.right - 0.55, FURNACE.meltY + (FURNACE.wallTop - FURNACE.meltY) / 2, -3.5], MAT.brick);
+  addBox(group, [30, FURNACE.wallTop - FURNACE.meltY, 1.1], [0, FURNACE.meltY + (FURNACE.wallTop - FURNACE.meltY) / 2, FURNACE.back + 0.55], MAT.brick);
+  addBox(group, [30, FURNACE.wallTop - FURNACE.meltY, 1.1], [0, FURNACE.meltY + (FURNACE.wallTop - FURNACE.meltY) / 2, FURNACE.front - 0.55], MAT.brick);
+  addBox(group, [11, 0.5, 26], [-8.5, FURNACE.wallTop + 0.25, -3.5], MAT.brickDark);
+  addBox(group, [11, 0.5, 26], [8.5, FURNACE.wallTop + 0.25, -3.5], MAT.brickDark);
+  addBox(group, [30, 0.24, 0.6], [0, FURNACE.wallTop + 0.62, -3.5], MAT.steelDark, { castShadow: false });
+  const hopper = new THREE.Group();
+  hopper.position.set(0, FURNACE.wallTop + 1.0, FURNACE.back + 1.2);
+  addBox(hopper, [3.4, 1.6, 2.4], [0, 0.8, 0], MAT.steel);
+  addCone(hopper, 1.7, 1.4, [0, 1.5, 0], MAT.steelDark, { axis: 'y', openEnded: true, rot: [Math.PI, 0, 0] });
+  group.add(hopper);
+  addBeamBetween(group, [0, FURNACE.wallTop + 1.2, FURNACE.back + 0.4], [0, FURNACE.wallTop - 0.2, FURNACE.back + 0.1], 0.8, MAT.steelDark);
+  const badge = makeBadgeSprite('FURNACE', 'FLOAT GLASS MELTING TANK', '#ffcf6e', 1.05);
+  badge.position.set(0, FURNACE.wallTop + 3.0, -3.5);
+  group.add(badge);
+  registerDevice(group, {
+    name: '浮法玻璃窑炉', en: 'FLOAT GLASS MELTING FURNACE', category: '窑炉主体', code: 'GLASS-01',
+    desc: '浮法玻璃熔窑，含熔化池、澄清部与侧墙小炉。玻璃配合料由后墙投料口进入，在熔化池内被燃烧器辐射加热至熔融状态；热辐射直接作用于玻璃液面，决定熔化质量与能耗水平。',
+    status: '运行中',
+    params: [
+      { label: '熔化池温度', value: 1580, jitter: 4, unit: '°C', digits: 0 },
+      { label: '玻璃液位', value: 620, unit: 'mm', digits: 0 },
+      { label: '窑压', value: 4.5, jitter: 0.2, unit: 'Pa', digits: 1 },
+      { label: '拉引量', value: 1200, unit: 't/d', digits: 0 }
+    ]
+  });
+  return group;
+}
+
+const BURNER_PORTS_Z = [-12, -4, 4];
+function makeBurnerAssembly(xSign) {
+  const group = new THREE.Group();
+  group.name = xSign > 0 ? 'BURNERS_RIGHT' : 'BURNERS_LEFT';
+  world.add(group);
+  const dirSign = -xSign;
+  const wallX = xSign > 0 ? FURNACE.right : FURNACE.left;
+  BURNER_PORTS_Z.forEach((z) => {
+    const body = new THREE.Group();
+    body.position.set(wallX + xSign * 0.4, FURNACE.burnY, z);
+    addCylinder(body, 0.52, 0.52, 1.7, [dirSign * 0.85, 0, 0], MAT.steel, { axis: 'x', radial: 20 });
+    addCylinder(body, 0.62, 0.62, 0.18, [dirSign * 1.78, 0, 0], MAT.steelDark, { axis: 'x', radial: 20 });
+    const face = new THREE.Group();
+    face.position.set(dirSign * 0.12, 0, 0);
+    addCylinder(face, 0.4, 0.4, 0.14, [0, 0, 0], MAT.steelDark, { axis: 'x', radial: 18 });
+    for (let r = -1; r <= 1; r++) {
+      for (let c = -1; c <= 1; c++) {
+        addCylinder(face, 0.055, 0.055, 0.18, [0, r * 0.16, c * 0.16], MAT.warning, { axis: 'x', radial: 10, castShadow: false });
+      }
+    }
+    for (let k = 0; k < 12; k++) {
+      const ang = (k / 12) * Math.PI * 2;
+      addTorus(body, 0.055, 0.014, [dirSign * 0.05, Math.cos(ang) * 0.3, Math.sin(ang) * 0.3], MAT.copper, { axis: 'x', radial: 8 });
+    }
+    body.add(face);
+    group.add(body);
+    const flameMat = new THREE.MeshStandardMaterial({ color: 0xff7a2f, emissive: 0xff5a12, emissiveIntensity: 1.6, transparent: true, opacity: 0.75, roughness: 0.4, metalness: 0 });
+    addOrientedCone(group, [wallX, FURNACE.burnY + 0.2, z], [dirSign, 0.06, 0], 3.4, 0.62, flameMat, { castShadow: false, radial: 16 });
+    flameMaterials.push(flameMat);
+    for (let i = 0; i < 6; i++) {
+      const sp = makeGlowSprite(0xff8a3d, 0.8 + Math.random() * 0.6);
+      sp.position.set(wallX + dirSign * (1.0 + Math.random() * 4), FURNACE.burnY + (Math.random() - 0.5) * 0.9, z + (Math.random() - 0.5) * 0.8);
+      sp.userData.flame = { base: sp.position.clone(), amp: 0.25, speed: 1.2 + Math.random() * 1.5, phase: Math.random() * 6.28 };
+      group.add(sp);
+    }
+  });
+  const badge = makeBadgeSprite('BURNER', 'FLEXIBLE POROUS GRADED', '#ff7a45', 0.9);
+  badge.position.set(wallX + xSign * 2.6, FURNACE.burnY + 1.8, -4);
+  group.add(badge);
+  registerDevice(group, {
+    name: xSign > 0 ? '右侧辐射编程燃烧器' : '左侧辐射编程燃烧器',
+    en: 'FLEXIBLE POROUS GRADED BURNER', category: '燃烧系统',
+    code: xSign > 0 ? 'BRN-R' : 'BRN-L',
+    desc: '首创柔性多孔分级式燃烧器：中心九孔阵列（3×3）承担碳烟前驱体富集与成核，外围十二孔环形阵列形成高温火幕与末端完全氧化带，夹层活塞空气通道截面连续可调，实现辐射场定向调控。',
+    status: '运行中',
+    params: [
+      { label: '热负荷', value: 9.2, jitter: 0.15, unit: 'MW', digits: 1 },
+      { label: '火焰摆动', value: 1.4, unit: 'cm', digits: 1 },
+      { label: '脱火极限', value: 16.7, unit: 'cm/s', digits: 1 },
+      { label: '当量比', value: 0.82, jitter: 0.01, unit: '', digits: 2 }
+    ]
+  });
+  return group;
+}
+
+const convRadField = new THREE.Group();
+convRadField.name = 'CONV_RADIATION';
+world.add(convRadField);
+const progRadField = new THREE.Group();
+progRadField.name = 'PROG_RADIATION';
+world.add(progRadField);
+let heatMesh = null;
+let heatUniformTex = null, heatUnevenTex = null;
+
+function buildRadiation() {
+  const heatGeo = new THREE.PlaneGeometry(27, 23.5);
+  heatGeo.rotateX(-Math.PI / 2);
+  heatUniformTex = makeHeatTexture(true);
+  heatUnevenTex = makeHeatTexture(false);
+  heatMesh = new THREE.Mesh(heatGeo, new THREE.MeshBasicMaterial({ map: heatUniformTex, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
+  heatMesh.position.set(0, FURNACE.meltY + 0.46, -3.5);
+  heatMesh.raycast = () => {};
+  heatMesh.userData.noPick = true;
+  world.add(heatMesh);
+  BURNER_PORTS_Z.forEach((z) => {
+    [-1, 1].forEach((side) => {
+      const nozzle = [side * (FURNACE.right - 0.2), FURNACE.burnY, z];
+      addRadiationCone(convRadField, nozzle, [side * -4.5, FURNACE.meltY + 0.2, z], 30, 0xff7a2f, 0.10);
+      addRadiationCone(progRadField, nozzle, [side * -3.2, FURNACE.meltY + 0.1, z + 0.6], 13, 0xffe0a0, 0.22);
+      addRadiationCone(progRadField, nozzle, [side * -3.2, FURNACE.meltY + 0.1, z - 0.6], 13, 0xffe0a0, 0.22);
+      const dir = new THREE.Vector3(side * -3.2, FURNACE.meltY + 0.1 - FURNACE.burnY, 0.6).normalize();
+      const len = Math.hypot(side * 3.2, FURNACE.burnY - (FURNACE.meltY + 0.1), 0.6);
+      for (let i = 0; i < 7; i++) {
+        addBeamParticle(new THREE.Vector3(...nozzle), dir, len, 0xffe0a0, 0.32, 3.2 + Math.random() * 1.6);
+      }
+    });
+  });
+  const rb = makeBadgeSprite('RADIATION', 'CARBON SOOT PROGRAMMING', '#ffcf6e', 1.0);
+  rb.position.set(0, FURNACE.wallTop + 4.6, -3.5);
+  progRadField.add(rb);
+}
+function makeHeatTexture(uniform) {
+  return makeCanvasTexture(256, 224, (ctx, w, h) => {
+    const img = ctx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const nx = x / w, ny = y / h;
+        let t = 0.5 + 0.35 * Math.sin(nx * Math.PI * 2) * Math.cos(ny * Math.PI);
+        if (!uniform) {
+          for (let s = 0; s < 5; s++) {
+            const sx = 0.15 + 0.7 * ((s * 37 + 11) % 1), sy = 0.2 + 0.6 * ((s * 53 + 7) % 1);
+            const d = Math.hypot(nx - sx, ny - sy);
+            t += 0.5 * Math.exp(-d * d * 42);
+          }
+        }
+        const v = clamp(t, 0, 1);
+        const idx = (y * w + x) * 4;
+        img.data[idx] = Math.round(26 + 224 * v);
+        img.data[idx + 1] = Math.round(40 + 160 * v * v);
+        img.data[idx + 2] = Math.round(70 + 90 * Math.pow(v, 0.35));
+        img.data[idx + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+}
+function buildForming() {
+  addBox(world, [4, 0.5, 3.4], [0, FURNACE.meltY + 0.2, FURNACE.front + 1.2], MAT.meltGlass, { castShadow: false });
+  const tin = new THREE.Group();
+  tin.name = 'TIN_BATH';
+  world.add(tin);
+  addBox(tin, [24, 0.9, 11], [0, 0.45, 16], MAT.concreteDark);
+  addBox(tin, [21, 0.3, 9], [0, 1.05, 16], MAT.tin);
+  addBox(tin, [19, 0.16, 8], [0, 1.32, 16], MAT.glassRibbon, { castShadow: false });
+  const tinBadge = makeBadgeSprite('TIN BATH', 'FLOAT FORMING', '#66e4ff', 0.95);
+  tinBadge.position.set(0, 3.0, 16);
+  tin.add(tinBadge);
+  registerDevice(tin, {
+    name: '锡槽', en: 'TIN BATH / FLOAT FORMING', category: '成形冷端', code: 'TIN-01',
+    desc: '熔融玻璃液从窑炉前端流入锡槽，浮在锡液表面摊平并冷却成形，形成连续玻璃带。锡槽温度场均匀性直接影响玻璃厚度偏差与表面质量。',
+    status: '运行中',
+    params: [
+      { label: '锡槽温度', value: 1050, jitter: 3, unit: '°C', digits: 0 },
+      { label: '锡液深度', value: 95, unit: 'mm', digits: 0 },
+      { label: '板宽', value: 2400, unit: 'mm', digits: 0 },
+      { label: '拉引速度', value: 8.6, jitter: 0.06, unit: 'm/min', digits: 1 }
+    ]
+  });
+
+  const lehr = new THREE.Group();
+  lehr.name = 'LEHR';
+  world.add(lehr);
+  addBox(lehr, [24, 2.2, 14], [0, 1.1, 31], MAT.concrete);
+  addBox(lehr, [20, 0.9, 10], [0, 1.6, 31], MAT.insulation, { noPick: true });
+  addBox(lehr, [18, 0.12, 9.4], [0, 2.28, 31], MAT.glassRibbon, { castShadow: false });
+  const lehrBadge = makeBadgeSprite('LEHR', 'ANNEALING TUNNEL', '#66e4ff', 0.9);
+  lehrBadge.position.set(0, 4.6, 31);
+  lehr.add(lehrBadge);
+  registerDevice(lehr, {
+    name: '退火窑', en: 'ANNEALING LEHR', category: '成形冷端', code: 'LEHR-01',
+    desc: '玻璃带在退火窑中缓慢冷却，消除热应力。退火温度曲线与玻璃带温度均匀性共同决定成品强度与切割品质。',
+    status: '运行中',
+    params: [
+      { label: '入口温度', value: 580, unit: '°C', digits: 0 },
+      { label: '出口温度', value: 60, unit: '°C', digits: 0 },
+      { label: '退火周期', value: 42, unit: 'min', digits: 0 }
+    ]
+  });
+
+  const cold = new THREE.Group();
+  cold.name = 'COLD_END';
+  world.add(cold);
+  addBox(cold, [22, 0.4, 9], [0, 0.2, 43], MAT.concreteDark);
+  for (let i = 0; i < 7; i++) {
+    addCylinder(cold, 0.16, 0.16, 21, [0, 0.7, 40.5 + i * 0.9], MAT.steel, { axis: 'x', radial: 14 });
+  }
+  addBox(cold, [24, 0.16, 1.0], [0, 1.1, 40.4], MAT.warning, { castShadow: false });
+  const sheetMat = new THREE.MeshStandardMaterial({ color: 0x8fd4e8, metalness: 0.1, roughness: 0.15, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  for (let i = 0; i < 5; i++) {
+    addBox(cold, [3.4, 0.03, 2.4], [5 + i * 0.15, 1.3 + i * 0.06, 46.5], sheetMat, { castShadow: false, noPick: true });
+  }
+  const coldBadge = makeBadgeSprite('COLD END', 'CUTTING & PACKING', '#66e4ff', 0.9);
+  coldBadge.position.set(0, 3.4, 46);
+  cold.add(coldBadge);
+  registerDevice(cold, {
+    name: '冷端切割', en: 'COLD END / CUTTING', category: '成形冷端', code: 'CUT-01',
+    desc: '退火后的玻璃带经切割、掰边、堆垛形成成品玻璃板。窑炉端辐射调控带来的厚度均匀性与良品率提升，在冷端体现为切割成品率的提高。',
+    status: '运行中',
+    params: [
+      { label: '成品率提升', value: '+20.1%', unit: '', digits: 0 },
+      { label: '板厚', value: 2.0, unit: 'mm', digits: 1 },
+      { label: '切割节拍', value: 11, jitter: 0.2, unit: '片/min', digits: 0 }
+    ]
+  });
+}
+
+function buildFlueGas() {
+  const group = new THREE.Group();
+  group.name = 'FLUE_GAS';
+  world.add(group);
+  addBox(group, [4, 3, 3.4], [-18, 3.4, -3.5], MAT.steelDark);
+  addCylinder(group, 0.9, 0.9, 6.5, [-18, FURNACE.wallTop + 4.6, -3.5], MAT.steelDark, { axis: 'y', radial: 16 });
+  addBeamBetween(group, [-18, FURNACE.wallTop + 8, -3.5], [-26, FURNACE.wallTop + 8, -20], 0.8, MAT.steelDark);
+  addCylinder(group, 1.1, 1.6, 16, [-26, 8, -20], MAT.concreteDark, { axis: 'y', radial: 18 });
+  const badge = makeBadgeSprite('FLUE GAS', 'SCR + CHIMNEY', '#9aa7b0', 0.8);
+  badge.position.set(-26, 17.5, -20);
+  group.add(badge);
+  registerDevice(group, {
+    name: '烟气净化系统', en: 'FLUE GAS TREATMENT', category: '窑炉主体', code: 'FGD-01',
+    desc: '窑炉烟气经 SCR 脱硝与烟道排至烟囱。辐射编程改造后燃烧更完全、温度场更均匀，SO₂ 减排 37.43%、CO₂ 减排 45.07%，烟气污染物浓度显著下降。',
+    status: '运行中',
+    params: [
+      { label: 'SO₂ 减排', value: '-37.43%', unit: '', digits: 0 },
+      { label: 'CO₂ 减排', value: '-45.07%', unit: '', digits: 0 },
+      { label: 'NOx 浓度', value: 78, jitter: 3, unit: 'mg/Nm³', digits: 0 }
+    ]
+  });
+}
+
+const diagOverlay = new THREE.Group();
+diagOverlay.name = 'DIAGNOSTICS';
+world.add(diagOverlay);
+
+function buildTwin() {
+  const fuel = new THREE.Group();
+  fuel.name = 'FUEL_SKID';
+  world.add(fuel);
+  addBox(fuel, [4.6, 2.4, 3], [20, 1.2, -14], MAT.concrete);
+  addCylinder(fuel, 1.0, 1.0, 2.6, [19.1, 1.9, -14], MAT.steel, { axis: 'y', radial: 18 });
+  addCylinder(fuel, 0.55, 0.55, 2.2, [21.1, 1.7, -14], MAT.steelDark, { axis: 'y', radial: 14 });
+  const fuelBadge = makeBadgeSprite('FUEL', 'METHANOL + TOLUENE', '#ff7a45', 0.8);
+  fuelBadge.position.set(20, 4.4, -14);
+  fuel.add(fuelBadge);
+  registerDevice(fuel, {
+    name: '燃料掺混系统', en: 'METHANOL / TOLUENE BLENDING', category: '燃烧系统', code: 'FUEL-01',
+    desc: '通过精细混烧甲醇与微量甲苯，引入碳烟颗粒作为“编程因子”：掺混促进 PAHs 生成，碳烟颗粒成核增长，把弱辐射放大为定向强辐射场，实现热辐射可设计、可调节、可优化。',
+    status: '运行中',
+    params: [
+      { label: '甲醇流量', value: 620, jitter: 4, unit: 'kg/h', digits: 0 },
+      { label: '甲苯比例', value: 0.8, unit: '%', digits: 1 },
+      { label: '掺混压力', value: 0.55, unit: 'MPa', digits: 2 }
+    ]
+  });
+  addBeamBetween(world, [18.5, 2.2, -13], [15, 2.2, -8], 0.3, MAT.pipe);
+  addBeamBetween(world, [15, 2.2, -8], [14.6, 3.1, -4], 0.3, MAT.pipe);
+
+  const sen = new THREE.Group();
+  sen.name = 'SENSORS';
+  world.add(sen);
+  [-11, 0, 11].forEach((x) => {
+    const pole = new THREE.Group();
+    pole.position.set(x, 0, FURNACE.front + 1.4);
+    addCylinder(pole, 0.1, 0.14, 6.6, [0, 3.3, 0], MAT.steelDark, { axis: 'y', radial: 10 });
+    const head = new THREE.Group();
+    head.position.set(0, 6.6, 0);
+    addCylinder(head, 0.34, 0.34, 0.5, [0, 0, 0], MAT.steel, { axis: 'y', radial: 16 });
+    addSphere(head, 0.2, [0, 0.3, 0], MAT.steel, { seg: 14 });
+    pole.add(head);
+    sen.add(pole);
+  });
+  const senBadge = makeBadgeSprite('FLAME DIAG', 'SPARSE SENSING + 3D RECON', '#31e0b5', 0.9);
+  senBadge.position.set(0, 8.4, FURNACE.front + 1.4);
+  sen.add(senBadge);
+  registerDevice(sen, {
+    name: '火焰诊断传感', en: 'FLAME DIAGNOSTICS SENSING', category: '数字孪生', code: 'SEN-01',
+    desc: '基于稀疏传感与火焰三维重构，实时重建炉内辐射场与温度场；配合三维火焰世界模型，将热辐射作为可编程控制变量纳入火焰调控体系。',
+    status: '运行中',
+    params: [
+      { label: '重建精度', value: '<2%', unit: '', digits: 0 },
+      { label: '预测准确率', value: '96%', unit: '', digits: 0 },
+      { label: '采样周期', value: 1, unit: 's', digits: 0 }
+    ]
+  });
+  [-11, 0, 11].forEach((x) => {
+    addRadiationCone(diagOverlay, [x, 6.9, FURNACE.front + 1.4], [x * 0.55, FURNACE.meltY + 0.3, -3.5], 6, 0x66e4ff, 0.12);
+  });
+  const ctrlCab = new THREE.Group();
+  ctrlCab.name = 'CONTROL_CABINET';
+  world.add(ctrlCab);
+  addBox(ctrlCab, [2.6, 3.2, 1.6], [-21, 1.6, 5], MAT.steelDark);
+  addBox(ctrlCab, [2.2, 2.2, 1.2], [-21, 1.9, 5.2], MAT.warning, { castShadow: false });
+  const ctrlBadge = makeBadgeSprite('PINN-MPC', 'ADAPTIVE CONTROL', '#31e0b5', 0.85);
+  ctrlBadge.position.set(-21, 4.6, 5);
+  ctrlCab.add(ctrlBadge);
+  registerDevice(ctrlCab, {
+    name: 'PINN-MPC 控制柜', en: 'PINN-MPC CONTROL CABINET', category: '数字孪生', code: 'CTRL-01',
+    desc: '物理信息神经网络（PINN）把传热机理约束引入模型训练，模型预测控制（MPC）在设备允许范围内计算供料与配风调节量，实现多约束闭环控制。较传统 PID 控制，控制系统鲁棒性提升 3.4 倍。',
+    status: '运行中',
+    params: [
+      { label: '控制鲁棒性', value: '3.4×', unit: '', digits: 0 },
+      { label: '负荷波动适应', value: '±15%', unit: '', digits: 0 },
+      { label: '控制周期', value: 1, unit: 's', digits: 0 }
+    ]
+  });
+  BURNER_PORTS_Z.forEach((z) => {
+    [-1, 1].forEach((side) => {
+      addRadiationCone(diagOverlay, [-20, 2.4, 5], [side * (FURNACE.right + 1.5), FURNACE.burnY, z], 1.6, 0x42e6a2, 0.10);
+    });
+  });
+}
+function isDeviceAvailableInMode(info, mode = state.mode) {
+  if (info && info.modes && !info.modes.includes(mode)) return false;
+  return true;
+}
+function isEffectivelyVisible(obj) {
+  let cur = obj;
+  while (cur) {
+    if (cur.visible === false) return false;
+    cur = cur.parent;
+  }
+  return true;
+}
+function setFlowMode(mode) {
+  state.mode = mode;
+  $$('.mode-btn').forEach((btn) => btn.classList.toggle('is-active', btn.dataset.mode === mode));
+  $('#modeNote').textContent = MODE_NOTE[mode];
+  $('#hudMode').textContent = MODE_TEXT[mode].split(' · ')[0];
+  $('#hudModeEn').textContent = MODE_TEXT[mode].split(' · ')[1] || mode.toUpperCase();
+  convRadField.visible = (mode === 'conventional');
+  progRadField.visible = (mode === 'programmed' || mode === 'diagnostics');
+  diagOverlay.visible = (mode === 'diagnostics');
+  if (heatMesh) {
+    heatMesh.material.map = (mode === 'conventional') ? heatUnevenTex : heatUniformTex;
+    heatMesh.material.needsUpdate = true;
+  }
+  flameMaterials.forEach((m) => {
+    if (mode === 'conventional') { m.color.set(0xff7a2f); m.emissive.set(0xff5a12); m.emissiveIntensity = 1.6; }
+    else { m.color.set(0xbff4ff); m.emissive.set(0x66e4ff); m.emissiveIntensity = 2.0; }
+  });
+  if (state.pinnedInfo && !isDeviceAvailableInMode(state.pinnedInfo)) clearDeviceSelection(false);
+  if (state.activeInfo && !isDeviceAvailableInMode(state.activeInfo)) renderOverview();
+  updateHUD();
+  const search = $('#deviceSearch');
+  if (search) search.value = '';
+  applyDeviceCatalogFilters();
+  if (state.hovered) hoverBox.setFromObject(state.hovered.group);
+}
+
+const HUD_CONFIG = {
+  conventional: [
+    { l: '能耗', v: '基准', u: 'BASELINE' },
+    { l: '成品率', v: '82.3%', u: '' },
+    { l: 'CO₂ 排放', v: '基准', u: 'BASELINE' },
+    { l: '定向辐射可控性', v: '无序', u: 'SCATTERED' }
+  ],
+  programmed: [
+    { l: '能耗', v: '-10%', u: '↓ 10.0%' },
+    { l: '成品率', v: '+20.1%', u: '↑ 20.1%' },
+    { l: 'CO₂ 排放', v: '-45.07%', u: '↓ 45.07%' },
+    { l: '定向辐射可控性', v: '+67%', u: '↑ 67%' }
+  ],
+  diagnostics: [
+    { l: '温度场均匀度', v: '+52.3%', u: '↑ 52.3%' },
+    { l: '预测准确率', v: '96%', u: '' },
+    { l: '控制鲁棒性', v: '3.4×', u: '' },
+    { l: '火焰摆动', v: '±1.4cm', u: '' }
+  ]
+};
+function updateHUD() {
+  const cfg = HUD_CONFIG[state.mode];
+  cfg.forEach((m, i) => {
+    $('#hudL' + i).textContent = m.l;
+    $('#hudV' + i).textContent = m.v;
+    $('#hudU' + i).textContent = m.u;
+  });
+}
+
+function modeText() { return MODE_TEXT[state.mode]; }
+function paramMarkup(p, i) {
+  return `<div class="param"><label>${p.label}</label><div class="val"><b data-param-index="${i}">${p.value}</b>${p.unit ? `<em>${p.unit}</em>` : ''}</div></div>`;
+}
+function renderOverview() {
+  state.activeInfo = null;
+  state.activeParamNodes = [];
+  $('#inspector').style.setProperty('--accent', '#ffcf6e');
+  $('#hoverState').textContent = 'PLANT OVERVIEW';
+  $('#inspectorContent').innerHTML = `
+    <div class="overview-kicker">RADIATION PROGRAMMING / FLAT GLASS</div>
+    <div class="overview-title">福莱特玻璃窑炉<br><span>辐射编程</span> 智慧改造</div>
+    <p class="overview-desc">福莱特玻璃集团是全球光伏玻璃第二大厂商，全球市占率约 27%–30%。针对“窑炉能耗高、非接触式热辐射定向调控困难”的痛点，项目以柔性多孔分级式燃烧器 + 碳烟辐射编程 + PINN-MPC 预测控制对窑炉进行智能化辐射编程改造，让每一份热按产品需求定向送达玻璃液面。</p>
+    <div class="overview-stats">
+      <div class="overview-stat"><label>能耗 / ENERGY</label><b>-10%<em></em></b></div>
+      <div class="overview-stat"><label>成品率 / YIELD</label><b>+20.1%<em></em></b></div>
+      <div class="overview-stat"><label>CO₂ 减排</label><b>-45.07%<em></em></b></div>
+      <div class="overview-stat"><label>SO₂ 减排</label><b>-37.43%<em></em></b></div>
+      <div class="overview-stat"><label>定向辐射可控性</label><b>+67%<em></em></b></div>
+      <div class="overview-stat"><label>温度场均匀度</label><b>+52.3%<em></em></b></div>
+    </div>
+    <div class="overview-hint"><b>交互提示</b>：将光标移至任意三维设备，或从右下角“设备目录”点击设备名称，即可查看设备参数并自动定位。顶部“传统燃烧 / 辐射编程 / 智慧诊断”三个按钮切换辐射调控模式，对比无序辐射与碳烟定向辐射的差异。</div>
+    <div class="sim-note">状态参数为教学演示模拟值 · SIMULATED TELEMETRY</div>
+  `;
+}
+function renderInspector(info) {
+  state.activeInfo = info;
+  $('#inspector').style.setProperty('--accent', categoryColor[info.category] || '#ffcf6e');
+  $('#hoverState').textContent = info.code || 'DEVICE';
+  const content = $('#inspectorContent');
+  content.innerHTML = `
+    <div class="device-category">
+      <span class="category-tag">${info.category || '设备'}</span>
+      <span class="device-code">${info.code || ''}</span>
+    </div>
+    <div class="device-title">${info.name}</div>
+    <div class="device-en">${info.en || ''}</div>
+    <p class="device-desc">${info.desc || ''}</p>
+    <div class="status-row">
+      <div class="status-pill ${info.warn ? 'warn' : ''}"><i></i>${info.status || '运行中'}</div>
+      <div class="mode-pill">${modeText()}</div>
+    </div>
+    <div class="param-head"><span>实时状态参数 / TELEMETRY</span><span class="tick">▍▍▍</span></div>
+    <div class="param-grid">${(info.params || []).map(paramMarkup).join('')}</div>
+    <div class="sim-note">参数为教学演示模拟值 · SIMULATED TELEMETRY</div>
+  `;
+  state.activeParamNodes = $$('[data-param-index]', content);
+  state.activeParamSeed = info.seed || 0;
+  content.scrollTop = 0;
+  updateActiveParams(performance.now() / 1000);
+}
+function renderValue(p, time, seed) {
+  const base = Number(p.value);
+  if (p.jitter && Number.isFinite(base)) {
+    const n = Math.sin(time * 1.3 + seed) * p.jitter + Math.sin(time * 2.1 + seed * 2) * p.jitter * 0.4;
+    return (base + n).toFixed(p.digits ?? 0);
+  }
+  return String(p.value);
+}
+function updateActiveParams(time) {
+  const info = state.activeInfo;
+  if (!info) return;
+  state.activeParamNodes.forEach((node, i) => {
+    const p = info.params[i];
+    if (!p) return;
+    node.textContent = renderValue(p, time, state.activeParamSeed);
+  });
+}
+function setHoveredDevice(info, force = false) {
+  const displayed = info || state.pinnedInfo;
+  if (!force && state.hovered === info && state.activeInfo === displayed) return;
+  state.hovered = info;
+  renderer.domElement.classList.toggle('is-hovering', !!info);
+  if (displayed) {
+    hoverBox.setFromObject(displayed.group);
+    hoverBox.visible = true;
+    renderInspector(displayed);
+  } else {
+    hoverBox.visible = false;
+    renderOverview();
+    setCatalogOverviewState(true);
+  }
+}
+function updateHover() {
+  if (!state.pointerDirty && state.pointerInside) return;
+  state.pointerDirty = false;
+  if (!state.pointerInside) { setHoveredDevice(null); return; }
+  raycaster.setFromCamera(state.pointer, camera);
+  const hits = raycaster.intersectObjects(pickables, false);
+  let found = null;
+  for (let i = 0; i < hits.length; i++) {
+    const info = hits[i].object.userData.deviceInfo;
+    if (info && isDeviceAvailableInMode(info) && isEffectivelyVisible(info.group)) { found = info; break; }
+  }
+  setHoveredDevice(found || null);
+}
+renderer.domElement.addEventListener('pointermove', (event) => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  state.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  state.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  state.pointerInside = true;
+  state.pointerDirty = true;
+});
+renderer.domElement.addEventListener('pointerleave', () => {
+  state.pointerInside = false;
+  state.pointerDirty = true;
+  setHoveredDevice(null);
+});
+controls.addEventListener('change', () => { state.pointerDirty = true; });
+controls.addEventListener('start', () => { state.cameraTween = null; renderer.domElement.classList.add('is-dragging'); });
+controls.addEventListener('end', () => { renderer.domElement.classList.remove('is-dragging'); });
+
+const CATALOG_CATEGORY_ORDER = ['窑炉主体', '燃烧系统', '成形冷端', '数字孪生'];
+function setCatalogOverviewState(active) {
+  const btn = $('#deviceList .dc-overview');
+  if (!btn) return;
+  btn.classList.toggle('is-active', active);
+  if (active) $$('#deviceList .device-item.is-active').forEach((el) => el.classList.remove('is-active'));
+}
+function setCatalogItemActive(info) {
+  $$('#deviceList .dc-overview').forEach((el) => el.classList.remove('is-active'));
+  $$('#deviceList .device-item').forEach((el) => {
+    el.classList.toggle('is-active', !!info && el.dataset.index === String(info.catalogIndex));
+  });
+}
+function clearDeviceSelection(resetView = false) {
+  state.pinnedInfo = null;
+  state.hovered = null;
+  hoverBox.visible = false;
+  renderer.domElement.classList.remove('is-hovering');
+  renderOverview();
+  setCatalogOverviewState(true);
+  if (resetView) resetCameraView();
+}
+function applyDeviceCatalogFilters() {
+  const list = $('#deviceList');
+  if (!list) return;
+  const q = ($('#deviceSearch')?.value || '').trim().toLowerCase();
+  let visible = 0;
+  $$('.device-group', list).forEach((group) => {
+    let groupVisible = 0;
+    $$('.device-item', group).forEach((item) => {
+      const info = devices[Number(item.dataset.index)];
+      const show = isDeviceAvailableInMode(info) && (!q || item.dataset.search.includes(q));
+      item.hidden = !show;
+      if (show) { groupVisible++; visible++; }
+    });
+    group.style.display = groupVisible ? '' : 'none';
+    const countEl = group.querySelector('.dg-count');
+    if (countEl) countEl.textContent = groupVisible;
+  });
+  const countEl = $('#deviceCount');
+  if (countEl) countEl.innerHTML = `<b>${visible}</b> 台设备`;
+}
+function focusDevice(info) {
+  if (!info || !info.group || !isDeviceAvailableInMode(info)) return;
+  state.pinnedInfo = info;
+  setHoveredDevice(null, true);
+  setCatalogItemActive(info);
+  focusCameraOnGroup(info.group, info);
+}
+function setupDeviceCatalog() {
+  const list = $('#deviceList');
+  list.innerHTML = '';
+  const overviewBtn = document.createElement('button');
+  overviewBtn.type = 'button';
+  overviewBtn.className = 'dc-overview is-active';
+  overviewBtn.innerHTML = '<span>全厂总览</span><span>RESET VIEW</span>';
+  overviewBtn.addEventListener('click', () => clearDeviceSelection(true));
+  list.appendChild(overviewBtn);
+  const byCategory = new Map();
+  devices.forEach((info, index) => {
+    info.catalogIndex = index;
+    if (!byCategory.has(info.category)) byCategory.set(info.category, []);
+    byCategory.get(info.category).push(info);
+  });
+  const categories = [
+    ...CATALOG_CATEGORY_ORDER.filter((cat) => byCategory.has(cat)),
+    ...[...byCategory.keys()].filter((cat) => !CATALOG_CATEGORY_ORDER.includes(cat))
+  ];
+  categories.forEach((cat) => {
+    const entries = byCategory.get(cat);
+    const color = categoryColor[cat] || '#66e4ff';
+    const group = document.createElement('section');
+    group.className = 'device-group';
+    group.style.setProperty('--cat', color);
+    const head = document.createElement('div');
+    head.className = 'device-group-head';
+    head.innerHTML = `<span><i class="dg-dot"></i>${cat}</span><span class="dg-count">${entries.length}</span>`;
+    group.appendChild(head);
+    const items = document.createElement('div');
+    items.className = 'device-group-items';
+    entries.forEach((info) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'device-item';
+      btn.dataset.index = String(info.catalogIndex);
+      btn.dataset.search = `${info.name} ${info.code || ''} ${info.category || ''} ${info.en || ''}`.toLowerCase();
+      btn.title = `${info.name} · ${info.category}`;
+      btn.innerHTML = `<i class="di-dot"></i><span class="di-name">${info.name}</span><span class="di-code">${info.code || ''}</span>`;
+      btn.addEventListener('click', () => focusDevice(info));
+      items.appendChild(btn);
+    });
+    group.appendChild(items);
+    list.appendChild(group);
+  });
+  applyDeviceCatalogFilters();
+}
+$('#deviceSearch').addEventListener('input', applyDeviceCatalogFilters);
+$('#catalogToggle').addEventListener('click', () => {
+  const body = $('.dc-body');
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  $('#catalogToggle').setAttribute('aria-expanded', String(!collapsed));
+  $('#catalogToggle').querySelector('span').textContent = collapsed ? '⌃' : '⌄';
+});
+
+function tweenCamera(toPos, toTarget, duration = 900) {
+  state.cameraTween = {
+    fromPos: camera.position.clone(), toPos: toPos.clone(),
+    fromTarget: controls.target.clone(), toTarget: toTarget.clone(),
+    start: performance.now(), duration
+  };
+}
+function resetCameraView() { tweenCamera(HOME_CAMERA, HOME_TARGET, 800); }
+$('#btnReset').addEventListener('click', resetCameraView);
+function updateCameraTween() {
+  if (!state.cameraTween) return;
+  const tw = state.cameraTween;
+  let t = (performance.now() - tw.start) / tw.duration;
+  t = clamp(t, 0, 1);
+  const e = 1 - Math.pow(1 - t, 3);
+  camera.position.lerpVectors(tw.fromPos, tw.toPos, e);
+  controls.target.lerpVectors(tw.fromTarget, tw.toTarget, e);
+  if (t >= 1) state.cameraTween = null;
+}
+function focusCameraOnGroup(group, info) {
+  const box = new THREE.Box3().setFromObject(group);
+  if (box.isEmpty()) return;
+  const center = box.getCenter(new THREE.Vector3());
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const fovRad = toRad(camera.fov);
+  const distance = Math.max(14, (sphere.radius / Math.sin(fovRad * 0.5)) * 1.5);
+  let dir;
+  if (info && (info.category === '成形冷端')) dir = new THREE.Vector3(0.25, 0.5, 1);
+  else if (info && (info.category === '数字孪生')) dir = new THREE.Vector3(-0.5, 0.45, 0.7);
+  else dir = new THREE.Vector3(-0.4, 0.5, 0.85);
+  dir.normalize();
+  const pos = center.clone().addScaledVector(dir, distance);
+  pos.y = Math.max(pos.y, 6);
+  tweenCamera(pos, center, 1000);
+}
+
+function updateFlames(time) {
+  world.traverse((obj) => {
+    if (obj.isSprite && obj.userData.flame) {
+      const f = obj.userData.flame;
+      obj.position.set(
+        f.base.x + Math.sin(time * f.speed + f.phase) * f.amp,
+        f.base.y + Math.cos(time * f.speed * 1.3 + f.phase) * f.amp,
+        f.base.z + Math.sin(time * f.speed * 0.8 + f.phase) * f.amp
+      );
+      obj.material.opacity = 0.55 + 0.35 * Math.sin(time * f.speed + f.phase);
+    }
+  });
+}
+function updateBeamParticles(time) {
+  const active = (state.mode === 'programmed' || state.mode === 'diagnostics');
+  beamParticles.forEach((sp) => {
+    sp.visible = active;
+    if (!active) return;
+    const b = sp.userData.beam;
+    b.t += b.speed * 0.12;
+    if (b.t > 1) b.t = 0;
+    sp.position.copy(b.from).addScaledVector(b.dir, b.len * b.t);
+    sp.material.opacity = 0.9 * (1 - b.t);
+  });
+}
+function updateScanBeams(time) {
+  if (state.mode !== 'diagnostics') return;
+  diagOverlay.children.forEach((child, i) => {
+    if (child.isMesh && child.geometry && child.geometry.type === 'ConeGeometry') {
+      child.material.opacity = 0.08 + 0.08 * Math.sin(time * 2 + i);
+    }
+  });
+}
+function animate() {
+  requestAnimationFrame(animate);
+  const t = performance.now() / 1000;
+  controls.update();
+  updateCameraTween();
+  updateFlames(t);
+  updateBeamParticles(t);
+  updateScanBeams(t);
+  updateHover();
+  updateActiveParams(t);
+  renderer.render(scene, camera);
+}
+
+function init() {
+  buildFurnace();
+  makeBurnerAssembly(-1);
+  makeBurnerAssembly(1);
+  buildRadiation();
+  buildForming();
+  buildFlueGas();
+  buildTwin();
+
+  convRadField.visible = false;
+  progRadField.visible = true;
+  diagOverlay.visible = false;
+
+  setupDeviceCatalog();
+  renderOverview();
+  updateHUD();
+  applyDeviceCatalogFilters();
+
+  $$('.mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.mode === state.mode) return;
+      setFlowMode(btn.dataset.mode);
+      if (state.hovered) hoverBox.setFromObject(state.hovered.group);
+    });
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  const loading = document.getElementById('loading');
+  if (loading) loading.classList.add('is-hidden');
+  window.__appReady = true;
+  state.started = true;
+  animate();
+}
+init();
+</script>
+</body>
+</html>
